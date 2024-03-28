@@ -1,0 +1,61 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="src">
+      <UniqueIdentifier>{b316e2d4-10e7-47ca-9752-71d3314ed319}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\Demo">
+      <UniqueIdentifier>{f571cb68-6061-42ff-bc0f-aa08f843cb76}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\Util">
+      <UniqueIdentifier>{9be4e08e-93c7-4a74-a0e9-b71424a175d9}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\main.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Demo\Demo.cpp">
+      <Filter>src\Demo</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Demo\NetMessage.cpp">
+      <Filter>src\Demo</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Demo\DemoMessage.cpp">
+      <Filter>src\Demo</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Dumper.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\Demo\DemoMessage.h">
+      <Filter>src\Demo</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Demo\NetMessage.h">
+      <Filter>src\Demo</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Demo\Demo.h">
+      <Filter>src\Demo</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Util\BinaryReader.h">
+      <Filter>src\Util</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Demo\structs.h">
+      <Filter>src\Demo</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Util\math.h">
+      <Filter>src\Util</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Util\BitReader.h">
+      <Filter>src\Util</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Dumper.h">
+      <Filter>src</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
