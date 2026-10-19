@@ -191,6 +191,7 @@
     <ClInclude Include="src\cssdemo\Protocol\Constants.h" />
     <ClInclude Include="src\cssdemo\Protocol\Types.h" />
     <ClInclude Include="src\cssdemo\Util\BitReader.h" />
+    <ClInclude Include="src\cssdemo\Util\BitWriter.h" />
     <ClInclude Include="src\cssdemo\Util\ByteReader.h" />
     <ClInclude Include="src\cssdemo\Util\Compression.h" />
     <ClInclude Include="src\cssdemo\cssdemo.h" />

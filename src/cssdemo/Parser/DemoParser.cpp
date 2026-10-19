@@ -22,12 +22,24 @@ void DemoParser::add_listener(DemoListener& listener)
 
 void DemoParser::run()
 {
-	notify([&](DemoListener& l) { l.on_header(file.header()); });
+	while (step()) {
+	}
+}
 
-	DemoFrame frame;
+bool DemoParser::step()
+{
+	if (finished) {
+		return false;
+	}
+	if (!started) {
+		started = true;
+		notify([&](DemoListener& l) { l.on_header(file.header()); });
+	}
+
 	try {
-		while (file.next_frame(frame)) {
-			handle_frame(frame);
+		if (file.next_frame(current)) {
+			handle_frame(current);
+			return true;
 		}
 		if (file.truncated()) {
 			error("demo ends without a stop frame");
@@ -37,7 +49,9 @@ void DemoParser::run()
 		error(std::string("can't read the rest of the demo: ") + e.what());
 	}
 
+	finished = true;
 	notify([&](DemoListener& l) { l.on_finish(game); });
+	return false;
 }
 
 void DemoParser::handle_frame(const DemoFrame& frame)

@@ -2,6 +2,7 @@
 #include "cssdemo/Net/NetMessages.h"
 #include "cssdemo/Protocol/Constants.h"
 #include "cssdemo/Util/BitReader.h"
+#include "cssdemo/Util/BitWriter.h"
 #include <stdexcept>
 
 namespace cssdemo {
@@ -15,6 +16,49 @@ const char* entity_update_kind_name(EntityUpdate::Kind kind)
 	case EntityUpdate::Kind::Delete: return "Delete";
 	}
 	return "Unknown";
+}
+
+void write_entity_updates(BitWriter& writer, std::span<const EntityUpdate> updates,
+	std::span<const int> explicit_deletions, bool is_delta, int class_bits)
+{
+	int last_index = -1;
+	for (const auto& update : updates) {
+		if (update.index <= last_index || update.index >= MAX_EDICTS) {
+			throw std::runtime_error("Entity index " + std::to_string(update.index) + " out of order or range");
+		}
+		writer.write_ubit_var(static_cast<uint32_t>(update.index - last_index - 1));
+		last_index = update.index;
+
+		using Kind = EntityUpdate::Kind;
+		switch (update.kind) {
+		case Kind::Enter:
+		case Kind::Delta:
+			if (!update.server_class) {
+				throw std::runtime_error("Entity " + std::to_string(update.index) + " has no server class");
+			}
+			writer.write_bool(false);
+			writer.write_bool(update.kind == Kind::Enter);
+			if (update.kind == Kind::Enter) {
+				writer.write_bits(update.server_class->class_id, class_bits);
+				writer.write_bits(update.serial, NUM_NETWORKED_EHANDLE_SERIAL_NUMBER_BITS);
+			}
+			write_prop_changes(writer, *update.server_class, update.changes);
+			break;
+		case Kind::Leave:
+		case Kind::Delete:
+			writer.write_bool(true);
+			writer.write_bool(update.kind == Kind::Delete);
+			break;
+		}
+	}
+
+	if (is_delta) {
+		for (int index : explicit_deletions) {
+			writer.write_bool(true);
+			writer.write_bits(index, MAX_EDICT_BITS);
+		}
+		writer.write_bool(false);
+	}
 }
 
 void Entity::apply(const std::vector<PropChange>& changes)

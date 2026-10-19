@@ -2,8 +2,10 @@
 #include "cssdemo/Net/NetMessages.h"
 #include "cssdemo/Protocol/Constants.h"
 #include "cssdemo/Util/BitReader.h"
+#include "cssdemo/Util/BitWriter.h"
 #include <array>
 #include <functional>
+#include <stdexcept>
 #include <type_traits>
 
 namespace cssdemo {
@@ -31,30 +33,87 @@ std::string clean(const std::string& text)
 	return result;
 }
 
+// reads into message, or writes source's fields in the same order
 class Fields {
-	BitReader& reader;
+	BitReader* reader{};
+	BitWriter* writer{};
 	UserMessage& message;
+	const UserMessage* source{};
+	size_t next = 0;
 
 public:
-	Fields(BitReader& r, UserMessage& m) : reader(r), message(m) {}
+	Fields(BitReader& r, UserMessage& m) : reader(&r), message(m) {}
+	Fields(BitWriter& w, const UserMessage& from, UserMessage& scratch) : writer(&w), message(scratch), source(&from) {}
 
-	bool more() const { return reader.bits_left() >= 8; }
+	bool more() const { return reader ? reader->bits_left() >= 8 : next < source->fields.size(); }
 
-	int byte(const char* name) { return add(name, static_cast<int>(reader.read_uint8())); }
-	int character(const char* name) { return add(name, static_cast<int>(reader.read_int8())); }
-	int word(const char* name) { return add(name, static_cast<int>(reader.read_uint16())); }
-	int short_(const char* name) { return add(name, static_cast<int>(reader.read_int16())); }
-	int long_(const char* name) { return add(name, static_cast<int>(reader.read_int32())); }
-	int sbits(const char* name, int bits) { return add(name, reader.read_signed_bits(bits)); }
-	float float_(const char* name) { return add(name, reader.read_float32()); }
-	Vector vec3_coord(const char* name) { return add(name, reader.read_bit_vec3_coord()); }
-	std::string string(const char* name) { return add(name, clean(reader.read_string(2048))); }
+	int byte(const char* name) {
+		return field<int>(name, [&] { return static_cast<int>(reader->read_uint8()); },
+			[&](int v) { writer->write_uint8(static_cast<uint8_t>(v)); });
+	}
+	int character(const char* name) {
+		return field<int>(name, [&] { return static_cast<int>(reader->read_int8()); },
+			[&](int v) { writer->write_int8(static_cast<int8_t>(v)); });
+	}
+	int word(const char* name) {
+		return field<int>(name, [&] { return static_cast<int>(reader->read_uint16()); },
+			[&](int v) { writer->write_uint16(static_cast<uint16_t>(v)); });
+	}
+	int short_(const char* name) {
+		return field<int>(name, [&] { return static_cast<int>(reader->read_int16()); },
+			[&](int v) { writer->write_int16(static_cast<int16_t>(v)); });
+	}
+	int long_(const char* name) {
+		return field<int>(name, [&] { return static_cast<int>(reader->read_int32()); },
+			[&](int v) { writer->write_int32(v); });
+	}
+	int sbits(const char* name, int bits) {
+		return field<int>(name, [&] { return reader->read_signed_bits(bits); },
+			[&](int v) { writer->write_signed_bits(v, bits); });
+	}
+	float float_(const char* name) {
+		return field<float>(name, [&] { return reader->read_float32(); },
+			[&](float v) { writer->write_float32(v); });
+	}
+	Vector vec3_coord(const char* name) {
+		return field<Vector>(name, [&] { return reader->read_bit_vec3_coord(); },
+			[&](const Vector& v) { writer->write_bit_vec3_coord(v); });
+	}
+	// fields keep the raw string, the returned one is for display
+	std::string string(const char* name) {
+		return clean(field<std::string>(name, [&] { return reader->read_string(2048); },
+			[&](const std::string& v) { writer->write_string(v); }));
+	}
 
 private:
-	template <typename T>
-	T add(const char* name, T value) {
-		message.fields.emplace_back(name, value);
-		return value;
+	template <typename T, typename Read, typename Write>
+	T field(const char* name, Read read, Write write) {
+		if (reader) {
+			T value = read();
+			message.fields.emplace_back(name, value);
+			return value;
+		}
+		if (next >= source->fields.size()) {
+			throw std::runtime_error(std::string("missing field ") + name);
+		}
+		const auto& value = source->fields[next++].second;
+		T result{};
+		if (auto v = std::get_if<T>(&value)) {
+			result = *v;
+		}
+		else if constexpr (std::is_same_v<T, int>) {
+			if (auto f = std::get_if<float>(&value)) result = static_cast<int>(*f);
+			else throw std::runtime_error(std::string("field ") + name + " has the wrong type");
+		}
+		else if constexpr (std::is_same_v<T, float>) {
+			if (auto i = std::get_if<int>(&value)) result = static_cast<float>(*i);
+			else throw std::runtime_error(std::string("field ") + name + " has the wrong type");
+		}
+		else {
+			throw std::runtime_error(std::string("field ") + name + " has the wrong type");
+		}
+		write(result);
+		return result;
 	}
 };
 
@@ -229,6 +288,33 @@ std::string user_message_name(int type)
 		return USER_MESSAGE_NAMES[type];
 	}
 	return "UserMessage" + std::to_string(type);
+}
+
+int user_message_type(const std::string& name)
+{
+	for (size_t i = 0; i < USER_MESSAGE_NAMES.size(); i++) {
+		if (name == USER_MESSAGE_NAMES[i]) return static_cast<int>(i);
+	}
+	return -1;
+}
+
+SvcUserMessage encode_user_message(const UserMessage& message)
+{
+	int type = message.name.empty() ? message.type : user_message_type(message.name);
+	if (type < 0 || type >= static_cast<int>(decoders().size()) || !decoders()[type]) {
+		throw std::runtime_error("Can't encode user message " + message.name);
+	}
+	BitWriter writer;
+	UserMessage scratch;
+	Fields fields(writer, message, scratch);
+	decoders()[type](fields, scratch);
+	if (fields.more()) {
+		throw std::runtime_error("User message " + message.name + " has more fields than its layout");
+	}
+	SvcUserMessage result;
+	result.msg_type = type;
+	result.data = writer.take_buffer();
+	return result;
 }
 
 UserMessage decode_user_message(const SvcUserMessage& message)

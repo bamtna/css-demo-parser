@@ -22,6 +22,9 @@ public:
 	void set_decode_entities(bool enabled) { decode_entities = enabled; }
 
 	void run();
+	// one frame, false once the demo is done (on_finish has been called then)
+	bool step();
+	const DemoFrame& frame() const { return current; }
 
 	const GameState& state() const { return game; }
 	const std::vector<ParseError>& errors() const { return parse_errors; }
@@ -32,6 +35,9 @@ private:
 	GameState game;
 	std::vector<ParseError> parse_errors;
 	int frame_tick{};
+	DemoFrame current;
+	bool started{};
+	bool finished{};
 	bool decode_entities = true;
 	bool entities_broken{};
 

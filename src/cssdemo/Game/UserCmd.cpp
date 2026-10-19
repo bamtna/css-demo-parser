@@ -1,6 +1,7 @@
 #include "UserCmd.h"
 #include "cssdemo/Protocol/Constants.h"
 #include "cssdemo/Util/BitReader.h"
+#include "cssdemo/Util/BitWriter.h"
 #include <array>
 
 namespace cssdemo {
@@ -35,6 +36,48 @@ UserCmd decode_user_cmd(std::span<const std::byte> payload)
 	if (reader.read_bool()) cmd.mouse_dx = reader.read_int16();
 	if (reader.read_bool()) cmd.mouse_dy = reader.read_int16();
 	return cmd;
+}
+
+std::vector<std::byte> encode_user_cmd(const UserCmd& cmd)
+{
+	BitWriter writer;
+	write_user_cmd(writer, cmd);
+	return writer.take_bytes();
+}
+
+void write_user_cmd(BitWriter& writer, const UserCmd& cmd)
+{
+	auto write_int = [&](int value, int from) {
+		writer.write_bool(value != from);
+		if (value != from) writer.write_int32(value);
+	};
+	auto write_float = [&](float value) {
+		writer.write_bool(value != 0.0f);
+		if (value != 0.0f) writer.write_float32(value);
+	};
+
+	write_int(cmd.command_number, 1);
+	write_int(cmd.tick_count, 1);
+	write_float(cmd.view_angles.x);
+	write_float(cmd.view_angles.y);
+	write_float(cmd.view_angles.z);
+	write_float(cmd.forward_move);
+	write_float(cmd.side_move);
+	write_float(cmd.up_move);
+	writer.write_bool(cmd.buttons != 0);
+	if (cmd.buttons) writer.write_uint32(cmd.buttons);
+	writer.write_bool(cmd.impulse != 0);
+	if (cmd.impulse) writer.write_uint8(static_cast<uint8_t>(cmd.impulse));
+	writer.write_bool(cmd.weapon_select != 0);
+	if (cmd.weapon_select) {
+		writer.write_bits(cmd.weapon_select, MAX_EDICT_BITS);
+		writer.write_bool(cmd.weapon_subtype != 0);
+		if (cmd.weapon_subtype) writer.write_bits(cmd.weapon_subtype, WEAPON_SUBTYPE_BITS);
+	}
+	writer.write_bool(cmd.mouse_dx != 0);
+	if (cmd.mouse_dx) writer.write_int16(static_cast<int16_t>(cmd.mouse_dx));
+	writer.write_bool(cmd.mouse_dy != 0);
+	if (cmd.mouse_dy) writer.write_int16(static_cast<int16_t>(cmd.mouse_dy));
 }
 
 std::string UserCmd::button_names() const

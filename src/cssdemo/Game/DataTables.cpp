@@ -1,6 +1,7 @@
 #include "DataTables.h"
 #include "cssdemo/Protocol/Constants.h"
 #include "cssdemo/Util/BitReader.h"
+#include "cssdemo/Util/BitWriter.h"
 #include <algorithm>
 #include <stdexcept>
 
@@ -54,11 +55,59 @@ void SendTable::parse(BitReader& reader)
 	}
 }
 
+void SendTable::write(BitWriter& writer) const
+{
+	writer.write_string(name);
+	writer.write_bits(static_cast<uint32_t>(props.size()), PROPINFOBITS_NUMPROPS);
+	for (const auto& prop : props) {
+		writer.write_bits(static_cast<uint32_t>(prop.type), PROPINFOBITS_TYPE);
+		writer.write_string(prop.name);
+		writer.write_bits(prop.flags, PROPINFOBITS_FLAGS);
+		if (prop.type == SendPropType::DataTable || prop.has_flag(SPROP_EXCLUDE)) {
+			writer.write_string(prop.dt_name);
+		}
+		else if (prop.type == SendPropType::Array) {
+			writer.write_bits(prop.num_elements, PROPINFOBITS_NUMELEMENTS);
+		}
+		else {
+			writer.write_float32(prop.low_value);
+			writer.write_float32(prop.high_value);
+			writer.write_bits(prop.num_bits, PROPINFOBITS_NUMBITS);
+		}
+	}
+}
+
+std::vector<std::byte> DataTables::write() const
+{
+	BitWriter writer;
+	write(writer);
+	return writer.take_bytes();
+}
+
+void DataTables::write(BitWriter& writer) const
+{
+	for (const auto& table : send_tables) {
+		writer.write_bool(true);
+		writer.write_bool(table.needs_decoder);
+		table.write(writer);
+	}
+	writer.write_bool(false);
+
+	writer.write_int16(static_cast<int16_t>(server_classes.size()));
+	for (int class_id : class_order) {
+		const auto& server_class = server_classes[class_id];
+		writer.write_int16(static_cast<int16_t>(class_id));
+		writer.write_string(server_class.class_name);
+		writer.write_string(server_class.data_table_name);
+	}
+}
+
 // DataTable_LoadDataTablesFromBuffer
 void DataTables::parse(std::span<const std::byte> payload)
 {
 	send_tables.clear();
 	server_classes.clear();
+	class_order.clear();
 	table_index.clear();
 
 	BitReader reader(payload);
@@ -78,6 +127,7 @@ void DataTables::parse(std::span<const std::byte> payload)
 			throw std::runtime_error("Server class id " + std::to_string(class_id) + " out of range");
 		}
 		auto& server_class = server_classes[class_id];
+		class_order.push_back(class_id);
 		server_class.class_id = class_id;
 		server_class.class_name = reader.read_string(256);
 		server_class.data_table_name = reader.read_string(256);

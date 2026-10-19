@@ -1,5 +1,6 @@
 #pragma once
 #include "cssdemo/Protocol/Types.h"
+#include <cstdint>
 #include <ostream>
 #include <vector>
 
@@ -23,11 +24,16 @@ struct SoundInfo {
 	int speaker_entity{ -1 };
 	bool is_ambient{};
 	bool is_sentence{};
+	// float fields the server sent although they quantise to the previous sound's value
+	enum : uint8_t { SENT_VOLUME = 1, SENT_DELAY = 2, SENT_ORIGIN_X = 4, SENT_ORIGIN_Y = 8, SENT_ORIGIN_Z = 16 };
+	uint8_t sent_unchanged{};
 
 	bool is_stop() const;
 };
 
 // CClientState::ProcessSounds
 std::vector<SoundInfo> decode_sounds(const SvcSounds& message, const ProtocolVersion& protocol);
+// SoundInfo_t::WriteDelta, each sound against the one before
+SvcSounds encode_sounds(const std::vector<SoundInfo>& sounds, const ProtocolVersion& protocol, bool reliable = false);
 
 }

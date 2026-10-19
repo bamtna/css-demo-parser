@@ -1,6 +1,7 @@
 #pragma once
 #include "cssdemo/Protocol/Types.h"
 #include "cssdemo/Util/BitReader.h"
+#include "cssdemo/Util/BitWriter.h"
 #include <memory>
 #include <ostream>
 #include <span>
@@ -9,7 +10,7 @@
 
 namespace cssdemo {
 
-// layouts follow ReadFromBuffer in common/netmessages.cpp
+// layouts follow ReadFromBuffer / WriteToBuffer in common/netmessages.cpp
 struct NetMessage {
 	enum class Type {
 		net_nop = 0,                 // nop command used for padding
@@ -50,6 +51,8 @@ struct NetMessage {
 	virtual ~NetMessage() = default;
 
 	virtual void parse(BitReader& reader, const ProtocolVersion& protocol) = 0;
+	// body only, write_net_message adds the type
+	virtual void write(BitWriter& writer, const ProtocolVersion& protocol) const = 0;
 	virtual void print(std::ostream& os) const = 0;
 
 	const Type type;
@@ -60,9 +63,18 @@ std::unique_ptr<NetMessage> create_net_message(NetMessage::Type type);
 struct ParsedPacket {
 	std::vector<std::unique_ptr<NetMessage>> messages;
 	std::string error; // set if parsing stopped early
+	BitBuffer padding; // bits after the last message, not always zero
 };
 
 ParsedPacket parse_packet(std::span<const std::byte> payload, const ProtocolVersion& protocol);
+
+void write_net_message(BitWriter& writer, const NetMessage& message, const ProtocolVersion& protocol);
+
+// CDemoRecorder::WriteMessages, pads with a nop like the engine when the last byte has room
+std::vector<std::byte> write_packet(std::span<const NetMessage* const> messages, const ProtocolVersion& protocol);
+std::vector<std::byte> write_packet(const std::vector<std::unique_ptr<NetMessage>>& messages, const ProtocolVersion& protocol);
+// exact inverse of parse_packet
+std::vector<std::byte> write_packet(const ParsedPacket& packet, const ProtocolVersion& protocol);
 
 template <NetMessage::Type T>
 struct NetMessageOf : NetMessage {
@@ -72,6 +84,7 @@ struct NetMessageOf : NetMessage {
 
 #define NET_MESSAGE_METHODS \
 	void parse(BitReader& reader, const ProtocolVersion& protocol) override; \
+	void write(BitWriter& writer, const ProtocolVersion& protocol) const override; \
 	void print(std::ostream& os) const override;
 
 struct NetNop : NetMessageOf<NetMessage::Type::net_nop> {
@@ -128,6 +141,7 @@ struct SvcServerInfo : NetMessageOf<NetMessage::Type::svc_server_info> {
 	int server_count{};
 	bool is_hltv{};
 	bool is_dedicated{};
+	uint32_t client_crc{ 0xFFFFFFFF }; // legacy
 	int max_classes{};
 	std::vector<std::byte> map_md5; // protocol > 17
 	int map_crc{};                  // protocol <= 17

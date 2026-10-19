@@ -8,6 +8,7 @@
 namespace cssdemo {
 
 class BitReader;
+class BitWriter;
 
 // dt_common.h
 enum SendPropFlags : uint32_t {
@@ -62,6 +63,8 @@ struct SendTable {
 	std::vector<SendProp> props;
 
 	void parse(BitReader& reader);
+	// SendTable_WriteInfos
+	void write(BitWriter& writer) const;
 };
 
 struct FlattenedProp {
@@ -83,6 +86,9 @@ struct ServerClass {
 class DataTables {
 public:
 	void parse(std::span<const std::byte> payload);
+	// DataTable_WriteSendTablesBuffer + DataTable_WriteClassInfosBuffer, the dem_datatables payload
+	std::vector<std::byte> write() const;
+	void write(BitWriter& writer) const;
 
 	bool empty() const { return server_classes.empty(); }
 	const std::vector<SendTable>& tables() const { return send_tables; }
@@ -95,6 +101,7 @@ public:
 private:
 	std::vector<SendTable> send_tables;
 	std::vector<ServerClass> server_classes; // indexed by class id
+	std::vector<int> class_order;            // as sent
 	std::unordered_map<std::string, size_t> table_index;
 
 	void flatten(ServerClass& server_class) const;

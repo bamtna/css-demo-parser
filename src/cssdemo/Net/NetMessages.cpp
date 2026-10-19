@@ -1,5 +1,7 @@
 #include "NetMessages.h"
 #include "cssdemo/Protocol/Constants.h"
+#include <algorithm>
+#include <cmath>
 #include <stdexcept>
 
 namespace cssdemo {
@@ -74,10 +76,51 @@ ParsedPacket parse_packet(std::span<const std::byte> payload, const ProtocolVers
 			break;
 		}
 	}
+	if (packet.error.empty()) {
+		packet.padding = reader.read_buffer(reader.bits_left());
+	}
 	return packet;
 }
 
+void write_net_message(BitWriter& writer, const NetMessage& message, const ProtocolVersion& protocol)
+{
+	writer.write_bits(static_cast<uint32_t>(message.type), NETMSG_TYPE_BITS);
+	message.write(writer, protocol);
+}
+
+std::vector<std::byte> write_packet(std::span<const NetMessage* const> messages, const ProtocolVersion& protocol)
+{
+	BitWriter writer;
+	for (const NetMessage* message : messages) {
+		write_net_message(writer, *message, protocol);
+	}
+	size_t used = writer.position() % 8;
+	if (used > 0 && used <= 8 - NETMSG_TYPE_BITS) {
+		writer.write_bits(static_cast<uint32_t>(NetMessage::Type::net_nop), NETMSG_TYPE_BITS);
+	}
+	return writer.take_bytes();
+}
+
+std::vector<std::byte> write_packet(const std::vector<std::unique_ptr<NetMessage>>& messages, const ProtocolVersion& protocol)
+{
+	std::vector<const NetMessage*> pointers;
+	for (const auto& message : messages) pointers.push_back(message.get());
+	return write_packet(pointers, protocol);
+}
+
+std::vector<std::byte> write_packet(const ParsedPacket& packet, const ProtocolVersion& protocol)
+{
+	BitWriter writer;
+	for (const auto& message : packet.messages) {
+		write_net_message(writer, *message, protocol);
+	}
+	writer.write_buffer(packet.padding);
+	return writer.take_bytes();
+}
+
 void NetNop::parse(BitReader&, const ProtocolVersion&) {}
+
+void NetNop::write(BitWriter&, const ProtocolVersion&) const {}
 
 void NetNop::print(std::ostream& os) const
 {
@@ -87,6 +130,11 @@ void NetNop::print(std::ostream& os) const
 void NetDisconnect::parse(BitReader& reader, const ProtocolVersion&)
 {
 	reason = reader.read_string(1024);
+}
+
+void NetDisconnect::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_string(reason);
 }
 
 void NetDisconnect::print(std::ostream& os) const
@@ -99,6 +147,13 @@ void NetFile::parse(BitReader& reader, const ProtocolVersion&)
 	transfer_id = reader.read_uint32();
 	file_name = reader.read_string(1024);
 	file_requested = reader.read_bool();
+}
+
+void NetFile::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_uint32(transfer_id);
+	writer.write_string(file_name);
+	writer.write_bool(file_requested);
 }
 
 void NetFile::print(std::ostream& os) const
@@ -114,6 +169,17 @@ void NetTick::parse(BitReader& reader, const ProtocolVersion&)
 	host_frame_time_std_deviation = reader.read_bits(16) / NET_TICK_SCALEUP;
 }
 
+void NetTick::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_int32(tick);
+	// rounded, not truncated, so parsed values come back exact
+	auto scale = [](float value) {
+		return static_cast<uint32_t>(std::clamp(std::lround(value * NET_TICK_SCALEUP), 0L, 65535L));
+	};
+	writer.write_bits(scale(host_frame_time), 16);
+	writer.write_bits(scale(host_frame_time_std_deviation), 16);
+}
+
 void NetTick::print(std::ostream& os) const
 {
 	os << "NetTick: tick=" << tick << ", host_frame_time=" << host_frame_time
@@ -123,6 +189,11 @@ void NetTick::print(std::ostream& os) const
 void NetStringCmd::parse(BitReader& reader, const ProtocolVersion&)
 {
 	command = reader.read_string(1024);
+}
+
+void NetStringCmd::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_string(command);
 }
 
 void NetStringCmd::print(std::ostream& os) const
@@ -141,6 +212,15 @@ void NetSetConVar::parse(BitReader& reader, const ProtocolVersion&)
 	}
 }
 
+void NetSetConVar::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_uint8(static_cast<uint8_t>(convars.size()));
+	for (const auto& convar : convars) {
+		writer.write_string(convar.name);
+		writer.write_string(convar.value);
+	}
+}
+
 void NetSetConVar::print(std::ostream& os) const
 {
 	os << "NetSetConVar: " << convars.size() << " convars";
@@ -155,6 +235,12 @@ void NetSignonState::parse(BitReader& reader, const ProtocolVersion&)
 	spawn_count = reader.read_int32();
 }
 
+void NetSignonState::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_uint8(static_cast<uint8_t>(signon_state));
+	writer.write_int32(spawn_count);
+}
+
 void NetSignonState::print(std::ostream& os) const
 {
 	static const char* names[] = { "none", "challenge", "connected", "new", "prespawn", "spawn", "full", "changelevel" };
@@ -166,6 +252,11 @@ void NetSignonState::print(std::ostream& os) const
 void SvcPrint::parse(BitReader& reader, const ProtocolVersion&)
 {
 	text = reader.read_string(2048);
+}
+
+void SvcPrint::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_string(text);
 }
 
 void SvcPrint::print(std::ostream& os) const
@@ -188,7 +279,7 @@ void SvcServerInfo::parse(BitReader& reader, const ProtocolVersion& version)
 	server_count = reader.read_int32();
 	is_hltv = reader.read_bool();
 	is_dedicated = reader.read_bool();
-	reader.read_int32(); // legacy client CRC
+	client_crc = reader.read_uint32();
 	max_classes = reader.read_uint16();
 	if (protocol > PROTOCOL_VERSION_17) {
 		map_md5 = reader.read_bytes(16);
@@ -206,6 +297,35 @@ void SvcServerInfo::parse(BitReader& reader, const ProtocolVersion& version)
 	host_name = reader.read_string(MAX_OSPATH);
 	if (version.network >= PROTOCOL_VERSION_REPLAY) {
 		is_replay = reader.read_bool();
+	}
+}
+
+void SvcServerInfo::write(BitWriter& writer, const ProtocolVersion& version) const
+{
+	writer.write_int16(static_cast<int16_t>(protocol));
+	writer.write_int32(server_count);
+	writer.write_bool(is_hltv);
+	writer.write_bool(is_dedicated);
+	writer.write_uint32(client_crc);
+	writer.write_uint16(static_cast<uint16_t>(max_classes));
+	if (protocol > PROTOCOL_VERSION_17) {
+		std::vector<std::byte> md5 = map_md5;
+		md5.resize(16);
+		writer.write_bytes(md5);
+	}
+	else {
+		writer.write_int32(map_crc);
+	}
+	writer.write_uint8(static_cast<uint8_t>(player_slot));
+	writer.write_uint8(static_cast<uint8_t>(max_clients));
+	writer.write_float32(tick_interval);
+	writer.write_uint8(static_cast<uint8_t>(os));
+	writer.write_string(game_dir);
+	writer.write_string(map_name);
+	writer.write_string(sky_name);
+	writer.write_string(host_name);
+	if (version.network >= PROTOCOL_VERSION_REPLAY) {
+		writer.write_bool(is_replay);
 	}
 }
 
@@ -234,6 +354,13 @@ void SvcSendTable::parse(BitReader& reader, const ProtocolVersion&)
 	data = reader.read_buffer(length);
 }
 
+void SvcSendTable::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_bool(needs_decoder);
+	writer.write_int16(static_cast<int16_t>(data.num_bits));
+	writer.write_buffer(data);
+}
+
 void SvcSendTable::print(std::ostream& os) const
 {
 	os << "SvcSendTable: needs_decoder=" << needs_decoder;
@@ -257,6 +384,22 @@ void SvcClassInfo::parse(BitReader& reader, const ProtocolVersion&)
 	}
 }
 
+void SvcClassInfo::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	int count = create_on_client ? num_server_classes : static_cast<int>(classes.size());
+	writer.write_int16(static_cast<int16_t>(count));
+	int server_class_bits = Q_log2(count) + 1;
+	writer.write_bool(create_on_client);
+	if (create_on_client) {
+		return;
+	}
+	for (const auto& info : classes) {
+		writer.write_bits(info.class_id, server_class_bits);
+		writer.write_string(info.class_name);
+		writer.write_string(info.data_table_name);
+	}
+}
+
 void SvcClassInfo::print(std::ostream& os) const
 {
 	os << "SvcClassInfo: num_server_classes=" << num_server_classes << ", create_on_client=" << create_on_client;
@@ -268,6 +411,11 @@ void SvcClassInfo::print(std::ostream& os) const
 void SvcSetPause::parse(BitReader& reader, const ProtocolVersion&)
 {
 	paused = reader.read_bool();
+}
+
+void SvcSetPause::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_bool(paused);
 }
 
 void SvcSetPause::print(std::ostream& os) const
@@ -296,6 +444,31 @@ void SvcCreateStringTable::parse(BitReader& reader, const ProtocolVersion& proto
 	data = reader.read_buffer(length);
 }
 
+void SvcCreateStringTable::write(BitWriter& writer, const ProtocolVersion& protocol) const
+{
+	if (is_filenames) {
+		writer.write_uint8(':');
+	}
+	writer.write_string(table_name);
+	writer.write_uint16(static_cast<uint16_t>(max_entries));
+	writer.write_bits(num_entries, Q_log2(max_entries) + 1);
+	if (protocol.network > PROTOCOL_VERSION_23) {
+		writer.write_var_int32(static_cast<uint32_t>(data.num_bits));
+	}
+	else {
+		writer.write_bits(static_cast<uint32_t>(data.num_bits), NET_MAX_PAYLOAD_BITS_V23 + 3);
+	}
+	writer.write_bool(user_data_fixed_size);
+	if (user_data_fixed_size) {
+		writer.write_bits(user_data_size, 12);
+		writer.write_bits(user_data_size_bits, 4);
+	}
+	if (protocol.network > PROTOCOL_VERSION_14) {
+		writer.write_bool(data_compressed);
+	}
+	writer.write_buffer(data);
+}
+
 void SvcCreateStringTable::print(std::ostream& os) const
 {
 	os << "SvcCreateStringTable: table_name=" << table_name
@@ -315,6 +488,20 @@ void SvcUpdateStringTable::parse(BitReader& reader, const ProtocolVersion&)
 	data = reader.read_buffer(reader.read_bits(20));
 }
 
+void SvcUpdateStringTable::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_bits(table_id, Q_log2(MAX_TABLES));
+	if (num_changed_entries == 1) {
+		writer.write_bool(false);
+	}
+	else {
+		writer.write_bool(true);
+		writer.write_uint16(static_cast<uint16_t>(num_changed_entries));
+	}
+	writer.write_bits(static_cast<uint32_t>(data.num_bits), 20);
+	writer.write_buffer(data);
+}
+
 void SvcUpdateStringTable::print(std::ostream& os) const
 {
 	os << "SvcUpdateStringTable: table_id=" << table_id
@@ -331,6 +518,15 @@ void SvcVoiceInit::parse(BitReader& reader, const ProtocolVersion&)
 	}
 }
 
+void SvcVoiceInit::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_string(codec);
+	writer.write_uint8(static_cast<uint8_t>(legacy_quality));
+	if (legacy_quality == 255) {
+		writer.write_int16(static_cast<int16_t>(sample_rate));
+	}
+}
+
 void SvcVoiceInit::print(std::ostream& os) const
 {
 	os << "SvcVoiceInit: codec=" << codec << ", legacy_quality=" << legacy_quality
@@ -342,6 +538,14 @@ void SvcVoiceData::parse(BitReader& reader, const ProtocolVersion&)
 	from_client = reader.read_uint8();
 	proximity = reader.read_uint8() != 0;
 	data = reader.read_buffer(reader.read_uint16());
+}
+
+void SvcVoiceData::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_uint8(static_cast<uint8_t>(from_client));
+	writer.write_uint8(proximity ? 1 : 0);
+	writer.write_uint16(static_cast<uint16_t>(data.num_bits));
+	writer.write_buffer(data);
 }
 
 void SvcVoiceData::print(std::ostream& os) const
@@ -365,6 +569,19 @@ void SvcSounds::parse(BitReader& reader, const ProtocolVersion&)
 	data = reader.read_buffer(length);
 }
 
+void SvcSounds::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_bool(reliable_sound);
+	if (reliable_sound) {
+		writer.write_bits(static_cast<uint32_t>(data.num_bits), 8);
+	}
+	else {
+		writer.write_bits(num_sounds, 8);
+		writer.write_bits(static_cast<uint32_t>(data.num_bits), 16);
+	}
+	writer.write_buffer(data);
+}
+
 void SvcSounds::print(std::ostream& os) const
 {
 	os << "SvcSounds: reliable_sound=" << reliable_sound << ", num_sounds=" << num_sounds;
@@ -374,6 +591,11 @@ void SvcSounds::print(std::ostream& os) const
 void SvcSetView::parse(BitReader& reader, const ProtocolVersion&)
 {
 	entity_index = reader.read_bits(MAX_EDICT_BITS);
+}
+
+void SvcSetView::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_bits(entity_index, MAX_EDICT_BITS);
 }
 
 void SvcSetView::print(std::ostream& os) const
@@ -389,6 +611,14 @@ void SvcFixAngle::parse(BitReader& reader, const ProtocolVersion&)
 	angle.z = reader.read_bit_angle(16);
 }
 
+void SvcFixAngle::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_bool(relative);
+	writer.write_bit_angle(angle.x, 16);
+	writer.write_bit_angle(angle.y, 16);
+	writer.write_bit_angle(angle.z, 16);
+}
+
 void SvcFixAngle::print(std::ostream& os) const
 {
 	os << "SvcFixAngle: relative=" << relative << ", angle=(" << angle.x << ", " << angle.y << ", " << angle.z << ")";
@@ -399,6 +629,13 @@ void SvcCrosshairAngle::parse(BitReader& reader, const ProtocolVersion&)
 	angle.x = reader.read_bit_angle(16);
 	angle.y = reader.read_bit_angle(16);
 	angle.z = reader.read_bit_angle(16);
+}
+
+void SvcCrosshairAngle::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_bit_angle(angle.x, 16);
+	writer.write_bit_angle(angle.y, 16);
+	writer.write_bit_angle(angle.z, 16);
 }
 
 void SvcCrosshairAngle::print(std::ostream& os) const
@@ -417,6 +654,21 @@ void SvcBSPDecal::parse(BitReader& reader, const ProtocolVersion&)
 	low_priority = reader.read_bool();
 }
 
+void SvcBSPDecal::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_bit_vec3_coord(pos);
+	writer.write_bits(decal_texture_index, MAX_DECAL_INDEX_BITS);
+	if (entity_index != 0) {
+		writer.write_bool(true);
+		writer.write_bits(entity_index, MAX_EDICT_BITS);
+		writer.write_bits(model_index, SP_MODEL_INDEX_BITS);
+	}
+	else {
+		writer.write_bool(false);
+	}
+	writer.write_bool(low_priority);
+}
+
 void SvcBSPDecal::print(std::ostream& os) const
 {
 	os << "SvcBSPDecal: pos=(" << pos.x << ", " << pos.y << ", " << pos.z << ")"
@@ -432,6 +684,13 @@ void SvcUserMessage::parse(BitReader& reader, const ProtocolVersion&)
 	data = reader.read_buffer(reader.read_bits(NETMSG_LENGTH_BITS));
 }
 
+void SvcUserMessage::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_uint8(static_cast<uint8_t>(msg_type));
+	writer.write_bits(static_cast<uint32_t>(data.num_bits), NETMSG_LENGTH_BITS);
+	writer.write_buffer(data);
+}
+
 void SvcUserMessage::print(std::ostream& os) const
 {
 	os << "SvcUserMessage: msg_type=" << msg_type;
@@ -445,6 +704,14 @@ void SvcEntityMessage::parse(BitReader& reader, const ProtocolVersion&)
 	data = reader.read_buffer(reader.read_bits(NETMSG_LENGTH_BITS));
 }
 
+void SvcEntityMessage::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_bits(entity_index, MAX_EDICT_BITS);
+	writer.write_bits(class_id, MAX_SERVER_CLASS_BITS);
+	writer.write_bits(static_cast<uint32_t>(data.num_bits), NETMSG_LENGTH_BITS);
+	writer.write_buffer(data);
+}
+
 void SvcEntityMessage::print(std::ostream& os) const
 {
 	os << "SvcEntityMessage: entity_index=" << entity_index << ", class_id=" << class_id;
@@ -454,6 +721,12 @@ void SvcEntityMessage::print(std::ostream& os) const
 void SvcGameEvent::parse(BitReader& reader, const ProtocolVersion&)
 {
 	data = reader.read_buffer(reader.read_bits(NETMSG_LENGTH_BITS));
+}
+
+void SvcGameEvent::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_bits(static_cast<uint32_t>(data.num_bits), NETMSG_LENGTH_BITS);
+	writer.write_buffer(data);
 }
 
 void SvcGameEvent::print(std::ostream& os) const
@@ -472,6 +745,20 @@ void SvcPacketEntities::parse(BitReader& reader, const ProtocolVersion&)
 	size_t length = reader.read_bits(DELTASIZE_BITS);
 	update_baseline = reader.read_bool();
 	data = reader.read_buffer(length);
+}
+
+void SvcPacketEntities::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_bits(max_entries, MAX_EDICT_BITS);
+	writer.write_bool(is_delta);
+	if (is_delta) {
+		writer.write_int32(delta_from);
+	}
+	writer.write_bits(baseline, 1);
+	writer.write_bits(updated_entries, MAX_EDICT_BITS);
+	writer.write_bits(static_cast<uint32_t>(data.num_bits), DELTASIZE_BITS);
+	writer.write_bool(update_baseline);
+	writer.write_buffer(data);
 }
 
 void SvcPacketEntities::print(std::ostream& os) const
@@ -494,6 +781,18 @@ void SvcTempEntities::parse(BitReader& reader, const ProtocolVersion& protocol)
 	data = reader.read_buffer(length);
 }
 
+void SvcTempEntities::write(BitWriter& writer, const ProtocolVersion& protocol) const
+{
+	writer.write_bits(num_entries, EVENT_INDEX_BITS);
+	if (protocol.network > PROTOCOL_VERSION_23) {
+		writer.write_var_int32(static_cast<uint32_t>(data.num_bits));
+	}
+	else {
+		writer.write_bits(static_cast<uint32_t>(data.num_bits), NET_MAX_PAYLOAD_BITS_V23);
+	}
+	writer.write_buffer(data);
+}
+
 void SvcTempEntities::print(std::ostream& os) const
 {
 	os << "SvcTempEntities: num_entries=" << num_entries;
@@ -503,6 +802,11 @@ void SvcTempEntities::print(std::ostream& os) const
 void SvcPrefetch::parse(BitReader& reader, const ProtocolVersion& protocol)
 {
 	sound_index = reader.read_bits(protocol.network > PROTOCOL_VERSION_22 ? MAX_SOUND_INDEX_BITS : 13);
+}
+
+void SvcPrefetch::write(BitWriter& writer, const ProtocolVersion& protocol) const
+{
+	writer.write_bits(sound_index, protocol.network > PROTOCOL_VERSION_22 ? MAX_SOUND_INDEX_BITS : 13);
 }
 
 void SvcPrefetch::print(std::ostream& os) const
@@ -516,6 +820,13 @@ void SvcMenu::parse(BitReader& reader, const ProtocolVersion&)
 	key_values = reader.read_bytes(reader.read_uint16());
 }
 
+void SvcMenu::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_int16(static_cast<int16_t>(menu_type));
+	writer.write_uint16(static_cast<uint16_t>(key_values.size()));
+	writer.write_bytes(key_values);
+}
+
 void SvcMenu::print(std::ostream& os) const
 {
 	os << "SvcMenu: menu_type=" << menu_type << ", length=" << key_values.size() << " bytes";
@@ -525,6 +836,13 @@ void SvcGameEventList::parse(BitReader& reader, const ProtocolVersion&)
 {
 	num_events = reader.read_bits(MAX_EVENT_BITS);
 	data = reader.read_buffer(reader.read_bits(20));
+}
+
+void SvcGameEventList::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_bits(num_events, MAX_EVENT_BITS);
+	writer.write_bits(static_cast<uint32_t>(data.num_bits), 20);
+	writer.write_buffer(data);
 }
 
 void SvcGameEventList::print(std::ostream& os) const
@@ -537,6 +855,12 @@ void SvcGetCvarValue::parse(BitReader& reader, const ProtocolVersion&)
 {
 	cookie = reader.read_int32();
 	cvar_name = reader.read_string(256);
+}
+
+void SvcGetCvarValue::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_int32(cookie);
+	writer.write_string(cvar_name);
 }
 
 void SvcGetCvarValue::print(std::ostream& os) const
@@ -553,6 +877,12 @@ void SvcCmdKeyValues::parse(BitReader& reader, const ProtocolVersion&)
 	key_values = reader.read_bytes(length);
 }
 
+void SvcCmdKeyValues::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_int32(static_cast<int32_t>(key_values.size()));
+	writer.write_bytes(key_values);
+}
+
 void SvcCmdKeyValues::print(std::ostream& os) const
 {
 	os << "SvcCmdKeyValues: length=" << key_values.size() << " bytes";
@@ -562,6 +892,12 @@ void SvcSetPauseTimed::parse(BitReader& reader, const ProtocolVersion&)
 {
 	paused = reader.read_bool();
 	expire_time = reader.read_float32();
+}
+
+void SvcSetPauseTimed::write(BitWriter& writer, const ProtocolVersion&) const
+{
+	writer.write_bool(paused);
+	writer.write_float32(expire_time);
 }
 
 void SvcSetPauseTimed::print(std::ostream& os) const

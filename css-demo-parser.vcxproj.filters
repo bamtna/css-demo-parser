@@ -149,6 +149,9 @@
     <ClInclude Include="src\cssdemo\Util\BitReader.h">
       <Filter>src\cssdemo\Util</Filter>
     </ClInclude>
+    <ClInclude Include="src\cssdemo\Util\BitWriter.h">
+      <Filter>src\cssdemo\Util</Filter>
+    </ClInclude>
     <ClInclude Include="src\cssdemo\Util\ByteReader.h">
       <Filter>src\cssdemo\Util</Filter>
     </ClInclude>

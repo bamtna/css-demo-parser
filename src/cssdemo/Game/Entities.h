@@ -12,6 +12,7 @@
 namespace cssdemo {
 
 class BitReader;
+class BitWriter;
 struct SvcPacketEntities;
 
 struct Entity {
@@ -34,6 +35,11 @@ struct EntityUpdate {
 };
 
 const char* entity_update_kind_name(EntityUpdate::Kind kind);
+
+// SV_WriteEntitiesToBuffer layout, updates in index order
+// explicit deletions only go into delta packets
+void write_entity_updates(BitWriter& writer, std::span<const EntityUpdate> updates,
+	std::span<const int> explicit_deletions, bool is_delta, int class_bits);
 
 // CL_ParsePacketEntities
 class EntityState {

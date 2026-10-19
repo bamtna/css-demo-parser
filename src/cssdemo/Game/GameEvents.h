@@ -52,13 +52,19 @@ class GameEventList {
 public:
 	void load(const SvcGameEventList& message);
 	GameEvent decode(const SvcGameEvent& message) const;
+	// CGameEventManager::SerializeEvent, keys by descriptor order, missing ones are zero
+	SvcGameEvent encode(const GameEvent& event) const;
+	SvcGameEventList write() const;
+	void add(GameEventDescriptor descriptor);
 
 	bool empty() const { return descriptors.empty(); }
 	const GameEventDescriptor* find(int event_id) const;
 	const std::unordered_map<int, GameEventDescriptor>& all() const { return descriptors; }
+	const GameEventDescriptor* find(const std::string& name) const;
 
 private:
 	std::unordered_map<int, GameEventDescriptor> descriptors;
+	std::vector<int> order; // as listed
 };
 
 }

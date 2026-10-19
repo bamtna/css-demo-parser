@@ -9,6 +9,7 @@
 namespace cssdemo {
 
 class BitReader;
+class BitWriter;
 
 struct PropValue;
 using PropArray = std::vector<PropValue>;
@@ -35,5 +36,18 @@ struct PropChange {
 
 // CDeltaBitsReader
 std::vector<PropChange> read_prop_changes(BitReader& reader, const ServerClass& server_class);
+
+// dt_encode.cpp, unset values encode as zero
+void encode_prop(BitWriter& writer, const FlattenedProp& flat, const PropValue& value);
+
+// CDeltaBitsWriter, changes in ascending index order
+void write_prop_changes(BitWriter& writer, const ServerClass& server_class, const std::vector<PropChange>& changes);
+
+// same encoded bits
+bool props_equal(const FlattenedProp& flat, const PropValue& a, const PropValue& b);
+
+// SendTable_CalcDelta, the props of to that encode differently from from
+std::vector<PropChange> diff_props(const ServerClass& server_class, const std::vector<PropValue>& from,
+	const std::vector<PropValue>& to);
 
 }

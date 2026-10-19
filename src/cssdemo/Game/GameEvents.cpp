@@ -2,6 +2,7 @@
 #include "cssdemo/Net/NetMessages.h"
 #include "cssdemo/Protocol/Constants.h"
 #include "cssdemo/Util/BitReader.h"
+#include "cssdemo/Util/BitWriter.h"
 #include <stdexcept>
 #include <type_traits>
 
@@ -11,6 +12,7 @@ namespace cssdemo {
 void GameEventList::load(const SvcGameEventList& message)
 {
 	descriptors.clear();
+	order.clear();
 	BitReader reader = message.data.reader();
 	for (int i = 0; i < message.num_events; i++) {
 		GameEventDescriptor descriptor{};
@@ -22,11 +24,74 @@ void GameEventList::load(const SvcGameEventList& message)
 			descriptor.keys.push_back({ type, reader.read_string(32) });
 			type = static_cast<GameEventDescriptor::KeyType>(reader.read_bits(3));
 		}
-		descriptors[descriptor.event_id] = std::move(descriptor);
+		add(std::move(descriptor));
 	}
 	if (!reader.at_end()) {
 		throw std::runtime_error("Game event list: " + std::to_string(reader.bits_left()) + " bits left unread");
 	}
+}
+
+void GameEventList::add(GameEventDescriptor descriptor)
+{
+	if (!descriptors.contains(descriptor.event_id)) {
+		order.push_back(descriptor.event_id);
+	}
+	int id = descriptor.event_id;
+	descriptors[id] = std::move(descriptor);
+}
+
+SvcGameEventList GameEventList::write() const
+{
+	SvcGameEventList message;
+	message.num_events = static_cast<int>(order.size());
+	BitWriter writer;
+	for (int id : order) {
+		const auto& descriptor = descriptors.at(id);
+		writer.write_bits(descriptor.event_id, MAX_EVENT_BITS);
+		writer.write_string(descriptor.name);
+		for (const auto& key : descriptor.keys) {
+			writer.write_bits(static_cast<uint32_t>(key.type), 3);
+			writer.write_string(key.name);
+		}
+		writer.write_bits(static_cast<uint32_t>(GameEventDescriptor::KeyType::Local), 3);
+	}
+	message.data = writer.take_buffer();
+	return message;
+}
+
+SvcGameEvent GameEventList::encode(const GameEvent& event) const
+{
+	const GameEventDescriptor* descriptor = event.event_id >= 0 ? find(event.event_id) : find(event.name);
+	if (!descriptor) {
+		throw std::runtime_error("Unknown game event " + event.name);
+	}
+	BitWriter writer;
+	writer.write_bits(descriptor->event_id, MAX_EVENT_BITS);
+
+	using KeyType = GameEventDescriptor::KeyType;
+	for (const auto& key : descriptor->keys) {
+		switch (key.type) {
+		case KeyType::String: writer.write_string(event.get_string(key.name)); break;
+		case KeyType::Float: writer.write_float32(event.get_float(key.name)); break;
+		case KeyType::Long: writer.write_int32(event.get_int(key.name)); break;
+		case KeyType::Short: writer.write_int16(static_cast<int16_t>(event.get_int(key.name))); break;
+		case KeyType::Byte: writer.write_uint8(static_cast<uint8_t>(event.get_int(key.name))); break;
+		case KeyType::Bool: writer.write_bool(event.get_int(key.name) != 0); break;
+		default:
+			throw std::runtime_error("Unknown key type in game event " + descriptor->name);
+		}
+	}
+	SvcGameEvent message;
+	message.data = writer.take_buffer();
+	return message;
+}
+
+const GameEventDescriptor* GameEventList::find(const std::string& name) const
+{
+	for (const auto& [id, descriptor] : descriptors) {
+		if (descriptor.name == name) return &descriptor;
+	}
+	return nullptr;
 }
 
 const GameEventDescriptor* GameEventList::find(int event_id) const

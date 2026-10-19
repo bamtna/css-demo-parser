@@ -1,5 +1,7 @@
 #include "DemoFile.h"
 #include "cssdemo/Protocol/Constants.h"
+#include <algorithm>
+#include <cstring>
 #include <fstream>
 #include <stdexcept>
 
@@ -90,13 +92,18 @@ bool DemoFile::next_frame(DemoFrame& frame)
 	// cut off recordings end mid frame
 	constexpr size_t FRAME_HEADER_SIZE = 5;
 	if (reader.remaining() < FRAME_HEADER_SIZE) {
-		// some files end with a stop command and no tick
+		// some files end with a stop command and part or none of its tick
 		bool stop_without_tick = reader.remaining() > 0 && reader.read_uint8() == static_cast<uint8_t>(DemoCommand::Stop);
 		finished = true;
 		was_truncated = !stop_without_tick;
+		short_stop = stop_without_tick;
 		if (stop_without_tick) {
 			frame = DemoFrame{};
 			frame.command = DemoCommand::Stop;
+			short_stop_bytes = static_cast<int>(reader.remaining());
+			for (int i = 0; i < short_stop_bytes; i++) {
+				frame.tick |= reader.read_uint8() << (8 * i);
+			}
 			return true;
 		}
 		return false;
@@ -147,6 +154,178 @@ bool DemoFile::next_frame(DemoFrame& frame)
 		return false;
 	}
 	return true;
+}
+
+std::vector<std::byte> write_demo_header(const DemoHeader& h)
+{
+	std::vector<std::byte> out;
+	auto put = [&](const void* data, size_t size) {
+		auto p = static_cast<const std::byte*>(data);
+		out.insert(out.end(), p, p + size);
+	};
+	auto put_string = [&](const std::string& s, size_t length) {
+		std::vector<char> buffer(length, '\0');
+		std::memcpy(buffer.data(), s.data(), std::min(s.size(), length - 1));
+		put(buffer.data(), length);
+	};
+	auto put_int = [&](int32_t v) { put(&v, sizeof(v)); };
+
+	put_string(h.file_stamp.empty() ? DEMO_HEADER_ID : h.file_stamp, 8);
+	put_int(h.demo_protocol);
+	put_int(h.network_protocol);
+	put_string(h.server_name, MAX_OSPATH);
+	put_string(h.client_name, MAX_OSPATH);
+	put_string(h.map_name, MAX_OSPATH);
+	put_string(h.game_directory, MAX_OSPATH);
+	put(&h.playback_time, sizeof(h.playback_time));
+	put_int(h.playback_ticks);
+	put_int(h.playback_frames);
+	put_int(h.signon_length);
+	return out;
+}
+
+DemoWriter::DemoWriter(DemoHeader header)
+	: demo_header(std::move(header))
+{
+	if (demo_header.file_stamp.empty()) demo_header.file_stamp = DEMO_HEADER_ID;
+	if (!demo_header.demo_protocol) demo_header.demo_protocol = DEMO_PROTOCOL;
+	if (!demo_header.network_protocol) demo_header.network_protocol = PROTOCOL_VERSION;
+}
+
+void DemoWriter::put_int(int32_t value)
+{
+	put_bytes({ reinterpret_cast<const std::byte*>(&value), sizeof(value) });
+}
+
+void DemoWriter::put_bytes(std::span<const std::byte> bytes)
+{
+	body.insert(body.end(), bytes.begin(), bytes.end());
+}
+
+void DemoWriter::put_raw(std::span<const std::byte> bytes)
+{
+	put_int(static_cast<int32_t>(bytes.size()));
+	put_bytes(bytes);
+}
+
+void DemoWriter::command_header(DemoCommand command, int tick)
+{
+	// sourcetv has its string tables in the signon
+	if (in_signon && command != DemoCommand::SignOn && command != DemoCommand::DataTables
+		&& command != DemoCommand::StringTables) {
+		in_signon = false;
+		signon_bytes = body.size();
+	}
+	body.push_back(static_cast<std::byte>(command));
+	put_int(tick);
+	frames++;
+	if (command == DemoCommand::Packet) packets++;
+	last_tick = tick;
+}
+
+void DemoWriter::write_packet(DemoCommand command, int tick, const CmdInfo& cmd_info, int in_sequence, int out_sequence,
+	std::span<const std::byte> payload)
+{
+	command_header(command, tick);
+	put_bytes({ reinterpret_cast<const std::byte*>(&cmd_info), sizeof(cmd_info) });
+	put_int(in_sequence);
+	put_int(out_sequence);
+	put_raw(payload);
+}
+
+void DemoWriter::write_user_cmd(int tick, int sequence, std::span<const std::byte> payload)
+{
+	command_header(DemoCommand::UserCmd, tick);
+	put_int(sequence);
+	put_raw(payload);
+}
+
+void DemoWriter::write_console_cmd(int tick, const std::string& command)
+{
+	command_header(DemoCommand::ConsoleCmd, tick);
+	std::string text = command.c_str();
+	put_int(static_cast<int32_t>(text.size() + 1));
+	put_bytes({ reinterpret_cast<const std::byte*>(text.c_str()), text.size() + 1 });
+}
+
+void DemoWriter::write_data(DemoCommand command, int tick, std::span<const std::byte> payload)
+{
+	command_header(command, tick);
+	put_raw(payload);
+}
+
+void DemoWriter::write_sync_tick(int tick)
+{
+	command_header(DemoCommand::SyncTick, tick);
+}
+
+void DemoWriter::write_stop(int tick)
+{
+	command_header(DemoCommand::Stop, tick);
+}
+
+void DemoWriter::write_stop_without_tick(int tick, int tick_bytes)
+{
+	if (in_signon) {
+		in_signon = false;
+		signon_bytes = body.size();
+	}
+	body.push_back(static_cast<std::byte>(DemoCommand::Stop));
+	for (int i = 0; i < tick_bytes && i < 4; i++) {
+		body.push_back(static_cast<std::byte>(tick >> (8 * i)));
+	}
+	frames++;
+	last_tick = tick;
+}
+
+void DemoWriter::write_frame(const DemoFrame& frame)
+{
+	switch (frame.command) {
+	case DemoCommand::SignOn:
+	case DemoCommand::Packet:
+		write_packet(frame.command, frame.tick, frame.cmd_info, frame.in_sequence, frame.out_sequence, frame.payload);
+		break;
+	case DemoCommand::ConsoleCmd:
+		write_console_cmd(frame.tick, frame.console_command);
+		break;
+	case DemoCommand::UserCmd:
+		write_user_cmd(frame.tick, frame.user_cmd_sequence, frame.payload);
+		break;
+	case DemoCommand::DataTables:
+	case DemoCommand::StringTables:
+		write_data(frame.command, frame.tick, frame.payload);
+		break;
+	case DemoCommand::SyncTick:
+		write_sync_tick(frame.tick);
+		break;
+	case DemoCommand::Stop:
+		write_stop(frame.tick);
+		break;
+	}
+}
+
+void DemoWriter::update_header(float tick_interval)
+{
+	demo_header.playback_ticks = last_tick;
+	demo_header.playback_time = tick_interval * static_cast<float>(last_tick);
+	demo_header.playback_frames = static_cast<int>(packets);
+	demo_header.signon_length = static_cast<int>(in_signon ? body.size() : signon_bytes);
+}
+
+std::vector<std::byte> DemoWriter::finish() const
+{
+	std::vector<std::byte> out = write_demo_header(demo_header);
+	out.insert(out.end(), body.begin(), body.end());
+	return out;
+}
+
+void DemoWriter::save(const std::string& path) const
+{
+	std::vector<std::byte> out = finish();
+	std::ofstream file(path, std::ios::binary | std::ios::trunc);
+	if (!file || !file.write(reinterpret_cast<const char*>(out.data()), static_cast<std::streamsize>(out.size()))) {
+		throw std::runtime_error("Error writing file: " + path);
+	}
 }
 
 }
