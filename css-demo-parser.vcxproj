@@ -151,21 +151,49 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\Demo\DemoMessage.cpp" />
-    <ClCompile Include="src\Demo\NetMessage.cpp" />
-    <ClCompile Include="src\Dumper.cpp" />
+    <ClCompile Include="src\cssdemo\Analysis\PlayerTracker.cpp" />
+    <ClCompile Include="src\cssdemo\Demo\DemoFile.cpp" />
+    <ClCompile Include="src\cssdemo\Game\DataTables.cpp" />
+    <ClCompile Include="src\cssdemo\Game\Entities.cpp" />
+    <ClCompile Include="src\cssdemo\Game\GameEvents.cpp" />
+    <ClCompile Include="src\cssdemo\Game\GameState.cpp" />
+    <ClCompile Include="src\cssdemo\Game\Players.cpp" />
+    <ClCompile Include="src\cssdemo\Game\Props.cpp" />
+    <ClCompile Include="src\cssdemo\Game\Sounds.cpp" />
+    <ClCompile Include="src\cssdemo\Game\StringTables.cpp" />
+    <ClCompile Include="src\cssdemo\Game\TempEntities.cpp" />
+    <ClCompile Include="src\cssdemo\Game\UserCmd.cpp" />
+    <ClCompile Include="src\cssdemo\Game\UserMessages.cpp" />
+    <ClCompile Include="src\cssdemo\Net\NetMessages.cpp" />
+    <ClCompile Include="src\cssdemo\Output\TextDumper.cpp" />
+    <ClCompile Include="src\cssdemo\Parser\DemoParser.cpp" />
+    <ClCompile Include="src\cssdemo\Util\Compression.cpp" />
     <ClCompile Include="src\main.cpp" />
-    <ClCompile Include="src\Demo\Demo.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\Dumper.h" />
-    <ClInclude Include="src\Util\BinaryReader.h" />
-    <ClInclude Include="src\Demo\Demo.h" />
-    <ClInclude Include="src\Demo\DemoMessage.h" />
-    <ClInclude Include="src\Demo\structs.h" />
-    <ClInclude Include="src\Demo\NetMessage.h" />
-    <ClInclude Include="src\Util\BitReader.h" />
-    <ClInclude Include="src\Util\math.h" />
+    <ClInclude Include="src\cssdemo\Analysis\PlayerTracker.h" />
+    <ClInclude Include="src\cssdemo\Demo\DemoFile.h" />
+    <ClInclude Include="src\cssdemo\Game\DataTables.h" />
+    <ClInclude Include="src\cssdemo\Game\Entities.h" />
+    <ClInclude Include="src\cssdemo\Game\GameEvents.h" />
+    <ClInclude Include="src\cssdemo\Game\GameState.h" />
+    <ClInclude Include="src\cssdemo\Game\Players.h" />
+    <ClInclude Include="src\cssdemo\Game\Props.h" />
+    <ClInclude Include="src\cssdemo\Game\Sounds.h" />
+    <ClInclude Include="src\cssdemo\Game\StringTables.h" />
+    <ClInclude Include="src\cssdemo\Game\TempEntities.h" />
+    <ClInclude Include="src\cssdemo\Game\UserCmd.h" />
+    <ClInclude Include="src\cssdemo\Game\UserMessages.h" />
+    <ClInclude Include="src\cssdemo\Net\NetMessages.h" />
+    <ClInclude Include="src\cssdemo\Output\TextDumper.h" />
+    <ClInclude Include="src\cssdemo\Parser\DemoListener.h" />
+    <ClInclude Include="src\cssdemo\Parser\DemoParser.h" />
+    <ClInclude Include="src\cssdemo\Protocol\Constants.h" />
+    <ClInclude Include="src\cssdemo\Protocol\Types.h" />
+    <ClInclude Include="src\cssdemo\Util\BitReader.h" />
+    <ClInclude Include="src\cssdemo\Util\ByteReader.h" />
+    <ClInclude Include="src\cssdemo\Util\Compression.h" />
+    <ClInclude Include="src\cssdemo\cssdemo.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

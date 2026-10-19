@@ -1,61 +1,162 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="Resource Files">
-      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
-    </Filter>
     <Filter Include="src">
       <UniqueIdentifier>{b316e2d4-10e7-47ca-9752-71d3314ed319}</UniqueIdentifier>
     </Filter>
-    <Filter Include="src\Demo">
-      <UniqueIdentifier>{f571cb68-6061-42ff-bc0f-aa08f843cb76}</UniqueIdentifier>
+    <Filter Include="src\cssdemo">
+      <UniqueIdentifier>{63f1b105-5413-49d2-a041-795846267247}</UniqueIdentifier>
     </Filter>
-    <Filter Include="src\Util">
-      <UniqueIdentifier>{9be4e08e-93c7-4a74-a0e9-b71424a175d9}</UniqueIdentifier>
+    <Filter Include="src\cssdemo\Analysis">
+      <UniqueIdentifier>{5014c9ff-0f33-45d8-a603-bae322bb4f59}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\cssdemo\Demo">
+      <UniqueIdentifier>{673b8415-77c2-44db-9828-b3906fd49927}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\cssdemo\Game">
+      <UniqueIdentifier>{87fd38ba-a975-47ea-ba69-b58e49bda214}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\cssdemo\Net">
+      <UniqueIdentifier>{8f0c0d75-80eb-4814-856d-80d2ceb6b4f3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\cssdemo\Output">
+      <UniqueIdentifier>{66a2af7a-b203-4415-9944-3edae28489ff}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\cssdemo\Parser">
+      <UniqueIdentifier>{2dc0a9fb-f50d-4c0c-b2df-d7544fc2e7d5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\cssdemo\Protocol">
+      <UniqueIdentifier>{6af6c3f4-033d-459e-8ac1-bc1bfdfd29a6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\cssdemo\Util">
+      <UniqueIdentifier>{8e740e7c-0302-4714-9849-80220181c8b5}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\cssdemo\Analysis\PlayerTracker.cpp">
+      <Filter>src\cssdemo\Analysis</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cssdemo\Demo\DemoFile.cpp">
+      <Filter>src\cssdemo\Demo</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cssdemo\Game\DataTables.cpp">
+      <Filter>src\cssdemo\Game</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cssdemo\Game\Entities.cpp">
+      <Filter>src\cssdemo\Game</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cssdemo\Game\GameEvents.cpp">
+      <Filter>src\cssdemo\Game</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cssdemo\Game\GameState.cpp">
+      <Filter>src\cssdemo\Game</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cssdemo\Game\Players.cpp">
+      <Filter>src\cssdemo\Game</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cssdemo\Game\Props.cpp">
+      <Filter>src\cssdemo\Game</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cssdemo\Game\Sounds.cpp">
+      <Filter>src\cssdemo\Game</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cssdemo\Game\StringTables.cpp">
+      <Filter>src\cssdemo\Game</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cssdemo\Game\TempEntities.cpp">
+      <Filter>src\cssdemo\Game</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cssdemo\Game\UserCmd.cpp">
+      <Filter>src\cssdemo\Game</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cssdemo\Game\UserMessages.cpp">
+      <Filter>src\cssdemo\Game</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cssdemo\Net\NetMessages.cpp">
+      <Filter>src\cssdemo\Net</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cssdemo\Output\TextDumper.cpp">
+      <Filter>src\cssdemo\Output</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cssdemo\Parser\DemoParser.cpp">
+      <Filter>src\cssdemo\Parser</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cssdemo\Util\Compression.cpp">
+      <Filter>src\cssdemo\Util</Filter>
+    </ClCompile>
     <ClCompile Include="src\main.cpp">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="src\Demo\Demo.cpp">
-      <Filter>src\Demo</Filter>
-    </ClCompile>
-    <ClCompile Include="src\Demo\NetMessage.cpp">
-      <Filter>src\Demo</Filter>
-    </ClCompile>
-    <ClCompile Include="src\Demo\DemoMessage.cpp">
-      <Filter>src\Demo</Filter>
-    </ClCompile>
-    <ClCompile Include="src\Dumper.cpp">
-      <Filter>src</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\Demo\DemoMessage.h">
-      <Filter>src\Demo</Filter>
+    <ClInclude Include="src\cssdemo\Analysis\PlayerTracker.h">
+      <Filter>src\cssdemo\Analysis</Filter>
     </ClInclude>
-    <ClInclude Include="src\Demo\NetMessage.h">
-      <Filter>src\Demo</Filter>
+    <ClInclude Include="src\cssdemo\Demo\DemoFile.h">
+      <Filter>src\cssdemo\Demo</Filter>
     </ClInclude>
-    <ClInclude Include="src\Demo\Demo.h">
-      <Filter>src\Demo</Filter>
+    <ClInclude Include="src\cssdemo\Game\DataTables.h">
+      <Filter>src\cssdemo\Game</Filter>
     </ClInclude>
-    <ClInclude Include="src\Util\BinaryReader.h">
-      <Filter>src\Util</Filter>
+    <ClInclude Include="src\cssdemo\Game\Entities.h">
+      <Filter>src\cssdemo\Game</Filter>
     </ClInclude>
-    <ClInclude Include="src\Demo\structs.h">
-      <Filter>src\Demo</Filter>
+    <ClInclude Include="src\cssdemo\Game\GameEvents.h">
+      <Filter>src\cssdemo\Game</Filter>
     </ClInclude>
-    <ClInclude Include="src\Util\math.h">
-      <Filter>src\Util</Filter>
+    <ClInclude Include="src\cssdemo\Game\GameState.h">
+      <Filter>src\cssdemo\Game</Filter>
     </ClInclude>
-    <ClInclude Include="src\Util\BitReader.h">
-      <Filter>src\Util</Filter>
+    <ClInclude Include="src\cssdemo\Game\Players.h">
+      <Filter>src\cssdemo\Game</Filter>
     </ClInclude>
-    <ClInclude Include="src\Dumper.h">
-      <Filter>src</Filter>
+    <ClInclude Include="src\cssdemo\Game\Props.h">
+      <Filter>src\cssdemo\Game</Filter>
+    </ClInclude>
+    <ClInclude Include="src\cssdemo\Game\Sounds.h">
+      <Filter>src\cssdemo\Game</Filter>
+    </ClInclude>
+    <ClInclude Include="src\cssdemo\Game\StringTables.h">
+      <Filter>src\cssdemo\Game</Filter>
+    </ClInclude>
+    <ClInclude Include="src\cssdemo\Game\TempEntities.h">
+      <Filter>src\cssdemo\Game</Filter>
+    </ClInclude>
+    <ClInclude Include="src\cssdemo\Game\UserCmd.h">
+      <Filter>src\cssdemo\Game</Filter>
+    </ClInclude>
+    <ClInclude Include="src\cssdemo\Game\UserMessages.h">
+      <Filter>src\cssdemo\Game</Filter>
+    </ClInclude>
+    <ClInclude Include="src\cssdemo\Net\NetMessages.h">
+      <Filter>src\cssdemo\Net</Filter>
+    </ClInclude>
+    <ClInclude Include="src\cssdemo\Output\TextDumper.h">
+      <Filter>src\cssdemo\Output</Filter>
+    </ClInclude>
+    <ClInclude Include="src\cssdemo\Parser\DemoListener.h">
+      <Filter>src\cssdemo\Parser</Filter>
+    </ClInclude>
+    <ClInclude Include="src\cssdemo\Parser\DemoParser.h">
+      <Filter>src\cssdemo\Parser</Filter>
+    </ClInclude>
+    <ClInclude Include="src\cssdemo\Protocol\Constants.h">
+      <Filter>src\cssdemo\Protocol</Filter>
+    </ClInclude>
+    <ClInclude Include="src\cssdemo\Protocol\Types.h">
+      <Filter>src\cssdemo\Protocol</Filter>
+    </ClInclude>
+    <ClInclude Include="src\cssdemo\Util\BitReader.h">
+      <Filter>src\cssdemo\Util</Filter>
+    </ClInclude>
+    <ClInclude Include="src\cssdemo\Util\ByteReader.h">
+      <Filter>src\cssdemo\Util</Filter>
+    </ClInclude>
+    <ClInclude Include="src\cssdemo\Util\Compression.h">
+      <Filter>src\cssdemo\Util</Filter>
+    </ClInclude>
+    <ClInclude Include="src\cssdemo\cssdemo.h">
+      <Filter>src\cssdemo</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

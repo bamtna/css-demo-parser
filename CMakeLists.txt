@@ -1,0 +1,42 @@
+cmake_minimum_required(VERSION 3.20)
+project(css-demo-parser LANGUAGES CXX)
+
+if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
+	set(CSSDEMO_TOP_LEVEL ON)
+else()
+	set(CSSDEMO_TOP_LEVEL OFF)
+endif()
+
+option(CSSDEMO_BUILD_CLI "Build the css-demo-parser command line tool" ${CSSDEMO_TOP_LEVEL})
+option(CSSDEMO_BUILD_EXAMPLES "Build the examples" ${CSSDEMO_TOP_LEVEL})
+option(CSSDEMO_BUILD_TESTS "Build the tests" ${CSSDEMO_TOP_LEVEL})
+set(CSSDEMO_TEST_DEMO_DIR "${PROJECT_SOURCE_DIR}/bin/Debug" CACHE PATH "Folder of .dem files the tests parse, if it exists")
+
+file(GLOB_RECURSE CSSDEMO_SOURCES CONFIGURE_DEPENDS src/cssdemo/*.cpp src/cssdemo/*.h)
+
+add_library(cssdemo STATIC ${CSSDEMO_SOURCES})
+add_library(cssdemo::cssdemo ALIAS cssdemo)
+target_include_directories(cssdemo PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>)
+target_compile_features(cssdemo PUBLIC cxx_std_20)
+if(MSVC)
+	target_compile_options(cssdemo PRIVATE /W4 /permissive-)
+else()
+	target_compile_options(cssdemo PRIVATE -Wall -Wextra)
+endif()
+
+if(CSSDEMO_BUILD_CLI)
+	add_executable(css-demo-parser src/main.cpp)
+	target_link_libraries(css-demo-parser PRIVATE cssdemo::cssdemo)
+endif()
+
+if(CSSDEMO_BUILD_EXAMPLES)
+	add_executable(player-csv examples/player_csv.cpp)
+	target_link_libraries(player-csv PRIVATE cssdemo::cssdemo)
+endif()
+
+if(CSSDEMO_BUILD_TESTS)
+	enable_testing()
+	add_executable(cssdemo-tests tests/tests.cpp)
+	target_link_libraries(cssdemo-tests PRIVATE cssdemo::cssdemo)
+	add_test(NAME cssdemo-tests COMMAND cssdemo-tests "${CSSDEMO_TEST_DEMO_DIR}")
+endif()
