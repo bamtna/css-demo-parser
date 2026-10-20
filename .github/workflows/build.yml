@@ -2,6 +2,7 @@ name: build
 
 on:
   push:
+    branches: ['**']
   pull_request:
 
 jobs:
@@ -9,7 +10,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        include:
+          - os: windows-latest
+            name: windows-x64
+            exe: build/Release/css-demo-parser.exe
+          - os: ubuntu-latest
+            name: linux-x64
+            exe: build/css-demo-parser
+          - os: macos-latest
+            name: macos-arm64
+            exe: build/css-demo-parser
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -19,3 +29,38 @@ jobs:
         run: cmake --build build --config Release --parallel
       - name: test
         run: ctest --test-dir build -C Release --output-on-failure
+      - name: package
+        shell: bash
+        run: |
+          mkdir dist
+          cp "${{ matrix.exe }}" dist/
+          cp README.md dist/
+          cd dist && cmake -E tar cf ../css-demo-parser-${{ matrix.name }}.zip --format=zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: css-demo-parser-${{ matrix.name }}
+          path: css-demo-parser-${{ matrix.name }}.zip
+
+  # releases v<version> from CMakeLists.txt if it doesn't exist yet
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=v$(sed -n 's/^project(css-demo-parser VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          if gh release view "$version" > /dev/null 2>&1; then
+            echo "$version already released"
+          else
+            gh release create "$version" dist/*.zip --target "$GITHUB_SHA" --title "$version" --generate-notes
+          fi

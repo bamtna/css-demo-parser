@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(css-demo-parser LANGUAGES CXX)
+project(css-demo-parser VERSION 0.1.0 LANGUAGES CXX)
 
 if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
 	set(CSSDEMO_TOP_LEVEL ON)
