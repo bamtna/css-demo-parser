@@ -32,7 +32,7 @@ cmake --build build --config Release
 ctest --test-dir build -C Release
 ```
 
-The tests parse and re-serialise every `.dem` in `bin/Debug` if that folder exists (set `CSSDEMO_TEST_DEMO_DIR` to point them elsewhere, `;` separated). `css-demo-parser.sln` still works for the command line tool in Visual Studio.
+The tests parse and re-serialise every `.dem` in `demos/` if that folder exists (set `CSSDEMO_TEST_DEMO_DIR` to point them elsewhere, `;` separated).
 
 ## Command line
 

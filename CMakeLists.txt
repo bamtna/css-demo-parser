@@ -10,7 +10,7 @@ endif()
 option(CSSDEMO_BUILD_CLI "Build the css-demo-parser command line tool" ${CSSDEMO_TOP_LEVEL})
 option(CSSDEMO_BUILD_EXAMPLES "Build the examples" ${CSSDEMO_TOP_LEVEL})
 option(CSSDEMO_BUILD_TESTS "Build the tests" ${CSSDEMO_TOP_LEVEL})
-set(CSSDEMO_TEST_DEMO_DIR "${PROJECT_SOURCE_DIR}/bin/Debug" CACHE STRING "Folders of .dem files the tests parse and re-serialise, ; separated, missing ones are skipped")
+set(CSSDEMO_TEST_DEMO_DIR "${PROJECT_SOURCE_DIR}/demos" CACHE STRING "Folders of .dem files the tests parse and re-serialise, ; separated, missing ones are skipped")
 
 file(GLOB_RECURSE CSSDEMO_SOURCES CONFIGURE_DEPENDS src/cssdemo/*.cpp src/cssdemo/*.h)
 
